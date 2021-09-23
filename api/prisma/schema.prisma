@@ -1,0 +1,163 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum RateType {
+  HOURLY
+  DAILY
+  PROJECT
+}
+
+enum WarrantyType {
+  STANDARD
+  UPGRADED
+}
+
+enum ProductCategory {
+  TRANSMISSION
+  TRANSMISSION_FLUID
+}
+
+enum QuoteStatus {
+  QUOTE_REQUESTED
+  NEW_ORDER
+  PENDING_ORDER
+  SHIPPED
+  DELIVERED
+  IN_PROGESS
+  COMPLETED
+}
+
+enum FluidSize {
+  QUART
+}
+
+enum FuelType {
+  DIESEL
+  GAS
+}
+
+model LaborPrice {
+  id         Int      @id @default(autoincrement())
+  created_at DateTime @default(now())
+  rate       Float
+  type       RateType @default(HOURLY)
+}
+
+model RepairShop {
+  id           Int      @id @default(autoincrement())
+  created_at   DateTime @default(now())
+  name         String
+  street       String
+  unit         String?
+  city         String
+  state        String
+  zip          Int
+  service_zips Int[]
+  Quote        Quote[]
+}
+
+model Customer {
+  id         Int      @id @default(autoincrement())
+  created_at DateTime @default(now())
+  first_name String
+  last_name  String
+  phone      Int
+  email      String
+  street     String?
+  unit       String?
+  city       String?
+  state      String?
+  zip        Int
+  Quote      Quote[]
+}
+
+model Vehicle {
+  id                 Int       @id @default(autoincrement())
+  created_at         DateTime  @default(now())
+  year               Int
+  make               String
+  model              String
+  sub_model          String?
+  engine_description String?
+  transmission_model String
+  fluid_title        String
+  fluid_amount       Float
+  fluid_measurement  FluidSize @default(QUART)
+  Quote              Quote[]
+  fuel_type          FuelType? @default(GAS)
+}
+
+model Product {
+  id                 Int              @id @default(autoincrement())
+  created_at         DateTime         @default(now())
+  handle             String           @unique
+  published          Boolean
+  category           ProductCategory? @default(TRANSMISSION)
+  vendor             String?
+  cost               Float?
+  unit_sale_price    Float
+  core_charge        Float?
+  transmission_model String?
+  fluid_title        String?
+  fluid_measurement  FluidSize?       @default(QUART)
+  fuel_type          FuelType?        @default(GAS)
+  standard_warranty  String?
+  extended_warranty  String?
+  additional_info    String?
+}
+
+model Quote {
+  id                 Int          @id @default(autoincrement())
+  created_at         DateTime     @default(now())
+  status             QuoteStatus? @default(QUOTE_REQUESTED)
+  labor_time         Float?
+  labor_price        Float?
+  shipping_rate      Float          @default(200)
+  shipping_type      String?
+  tax                Float
+  transmission_price Float?
+  vin                String?
+  zip                Int?
+  warranty_type      WarrantyType   @default(STANDARD)
+  fluid_price        Float?
+  vehicle            Vehicle        @relation(fields: [vehicle_id], references: [id])
+  vehicle_id         Int
+  customer           Customer?      @relation(fields: [customer_id], references: [id])
+  customer_id        Int?
+  repair_shop        RepairShop?    @relation(fields: [repair_shop_id], references: [id])
+  repair_shop_id     Int?
+  Order              Order[]
+  additional_info    String?
+  standard_warranty  String?
+  extended_warranty  String?
+  shipping_info      ShippingInfo?  @relation(fields: [shipping_info_id] , references: [id])
+  shipping_info_id   Int?
+}
+
+model Order {
+  id         Int      @id @default(autoincrement())
+  created_at DateTime @default(now())
+  quote      Quote    @relation(fields: [quote_id], references: [id])
+  quote_id   Int
+}
+
+model ShippingInfo {
+  id         Int      @id @default(autoincrement())
+  created_at DateTime @default(now())
+  company    String?
+  street     String?
+  unit       String?
+  city       String?
+  state      String?
+  zip        String?
+  Quote      Quote[]
+}

@@ -1,0 +1,28 @@
+version: '3'
+services:
+  api:
+    image: instant-quote/admin-api
+    env_file:
+      - ./api/.env
+    build:
+      context: ./api
+      dockerfile: Dockerfile.dev
+    volumes:
+      - /app/node_modules
+    ports:
+      - '5000:5000'
+  ui:
+    image: instant-quote/admin-ui
+    env_file:
+      - ./ui/.env
+    build:
+      context: ./ui
+      dockerfile: Dockerfile.prod
+    volumes:
+      - /app/node_modules
+      - /usr/src/app/node_modules
+      - ./ui:/app
+    ports:
+      - '80:80'
+    depends_on:
+      - 'api'
