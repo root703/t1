@@ -1,40 +1,95 @@
-stage('Git Clone') {
-      steps {
-        script {
-            git branch: master,
-              credentialsId: <your credentials id>,
-              url: https://gitlab.com/flexor-auto/flexor-instant-quote.git
-        }
-      }
-    }
 
-stage('Docker Build') {
-      steps {
-        script {
-            docker-compose up        }
-      }
-    }
+#All the environment variables are defined under Settings > CI/CD > Secret Variables section 
+image: docker:latest
+variables:
+  DOCKER_DRIVER: overlay2
 
-stage('docker push SG') {
-      steps {
-        script {
-          withAWS(region: 'us-wast-1', credentials: 'AKIASXVFUKPK6W6ZKEU3') {
-            sh "${ecrLogin()}"
-            sh " docker tag ecs:latest 188252181461.dkr.ecr.us-west-1.amazonaws.com/ecs:latest"
-	    sh "docker build -t ecs ."
-            sh "docker push 188252181461.dkr.ecr.us-west-1.amazonaws.com/ecs:latest"
-          }
-        }
-      }
-    }
-try {
-  withAWS(region: 'us-wast-1', credentials: 'AKIASXVFUKPK6W6ZKEU3') {
-    def updateService = "aws ecs update-service --service ECS --cluster ECSJenkins --force-new-deployment"
-    def runUpdateService = sh(returnStdout: true, script: updateService)
-    def serviceStable = "aws ecs wait services-stable --service $internationalService --cluster $internationalCluster"
-    sh(returnStdout: true, script: serviceStable)
-    // put all your slack messaging here
-  }
-} catch(Exception e) {
-  echo e.message.toString()
-}
+services:
+- docker:dind
+
+stages:
+- build_dev
+- build_prod
+- deploy_dev
+- deploy_prod
+
+before_script:
+- docker login $REGISTRY  -u $REGISTRY_USER -p $REGISTRY_USER_PASSWORD
+
+build_dev:
+  stage: build_dev
+  only:
+   - /^dev-.*$/
+  except:
+   - branches
+  script:
+  - docker build --no-cache -t "$REGISTRY/$REPO_DEV:$CI_BUILD_REF_NAME" .
+  - docker push $REGISTRY/$REPO_DEV:$CI_BUILD_REF_NAME
+
+build_prod:
+  stage: build_prod
+  only:
+  - /^prod-.*$/
+  except:
+  - branches
+  script:
+  - docker build --no-cache -t "$REGISTRY/$REPO_DEV:$CI_BUILD_REF_NAME" .
+  - docker push $REGISTRY/$REPO_DEV:$CI_BUILD_REF_NAME
+  
+
+deploy_dev:
+  stage: deploy_dev
+  script:
+  # Install python requirements
+  - apk update
+  - apk upgrade
+  - apk add util-linux pciutils usbutils coreutils binutils findutils grep
+  - apk add python python-dev py-pip
+
+  # AWS configs
+  - export AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY
+  - export AWS_SECRET_ACCESS_KEY=$AWS_SECRET_KEY
+
+  # Install awscli
+  - pip install awscli
+
+  # Configure deploy.json
+  - cd deployment
+  - sed -i -e "s/N_ENV/$NODE_ENV_DEVELOPMENT/g" deploy.json
+  - sed -i -e "s/REPO/$REPO_DEV/g" deploy.json
+  - sed -i -e "s/TAG/$CI_BUILD_REF_NAME/g" deploy.json
+
+  # Update task and service
+  - aws ecs register-task-definition --region <your-ecs-region> --cli-input-json file://deploy.json >> temp.json
+  - REV=`grep  '"revision"' temp.json | awk '{print $2}'`
+  - echo $REV
+  - aws ecs update-service --cluster <ecs-cluster-name> --service <ecs-service-name> --task-definition <your-ecs-task-name>:${REV} --region <your-ecs-region>  
+  when: manual
+
+deploy_prod:
+  stage: deploy_prod
+  script: 
+  # Install python requirements
+  - apk update
+  - apk upgrade
+  - apk add util-linux pciutils usbutils coreutils binutils findutils grep
+  - apk add python python-dev py-pip
+
+  # AWS configs
+  - export AWS_ACCESS_KEY_ID=AKIASXVFUKPK6W6ZKEU3
+  - export AWS_SECRET_ACCESS_KEY=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
+
+  # Install awscli
+  - pip install awscli
+
+  # Configure package.json
+  # cd deployment
+  - sed -i -e "s/N_ENV/$NODE_ENV_PRODUCTION/g" package.json
+  - sed -i -e "s/REPO/$REPO_PROD/g" package.json
+  - sed -i -e "s/TAG/$CI_BUILD_REF_NAME/g" package.json
+  # Update task and service
+  - aws ecs register-task-definition --region  us-west-1 --cli-input-json file://package.json >> temp.json
+  - REV=`grep  '"revision"' temp.json | awk '{print $2}'`
+  - echo $REV
+  - aws ecs update-service --cluster ECSJenkins --service ecs  --task-definition deployment:${REV} --region us-west-1
+  when: manual
