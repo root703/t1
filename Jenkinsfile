@@ -4,8 +4,7 @@ image: docker:latest
 variables:
   DOCKER_DRIVER: overlay2
 
-services:
-- docker:build
+
 
 stages:
 - build_dev
