@@ -1,5 +1,5 @@
 
-# All the environment variables are defined under Settings > CI/CD > Secret Variables section 
+
 image: docker:latest
 variables:
   DOCKER_DRIVER: overlay2
