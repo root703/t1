@@ -13,7 +13,7 @@ stages:
 - deploy_prod
 
 before_script:
-- docker login $REGISTRY  -u $REGISTRY_USER -p $REGISTRY_USER_PASSWORD
+- docker login  -u jaydarji80 -p 123@o2hiT
 
 build_dev:
   stage: build_dev
